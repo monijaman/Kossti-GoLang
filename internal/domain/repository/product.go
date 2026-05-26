@@ -7,18 +7,19 @@ import (
 
 // ProductFilters represents filter parameters for product queries
 type ProductFilters struct {
-	Page         int      `json:"page"`
-	Limit        int      `json:"limit"`
-	Locale       string   `json:"locale"`
-	SearchTerm   string   `json:"searchterm"`
-	Category     string   `json:"category"`
-	Brand        string   `json:"brand"`
-	PriceRange   string   `json:"priceRange"`
-	SortBy       string   `json:"sortby"`
-	MinPrice     *float64 `json:"minPrice,omitempty"`
-	MaxPrice     *float64 `json:"maxPrice,omitempty"`
-	BrandSlugs   []string `json:"brandSlugs,omitempty"`
-	CategorySlug string   `json:"categorySlug,omitempty"`
+	Page              int      `json:"page"`
+	Limit             int      `json:"limit"`
+	Locale            string   `json:"locale"`
+	SearchTerm        string   `json:"searchterm"`
+	Category          string   `json:"category"`
+	Brand             string   `json:"brand"`
+	PriceRange        string   `json:"priceRange"`
+	SortBy            string   `json:"sortby"`
+	MinPrice          *float64 `json:"minPrice,omitempty"`
+	MaxPrice          *float64 `json:"maxPrice,omitempty"`
+	BrandSlugs        []string `json:"brandSlugs,omitempty"`
+	CategorySlug      string   `json:"categorySlug,omitempty"`
+	ExcludeProductIDs []uint   `json:"excludeProductIds,omitempty"`
 }
 
 type ProductRepository interface {

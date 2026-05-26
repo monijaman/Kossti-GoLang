@@ -608,6 +608,11 @@ func (r *PostgresProductRepo) applyFilters(query *gorm.DB, filters *repository.P
 		query = query.Where("COALESCE(products.start_price, products.end_price, 0) <= ?", *filters.MaxPrice)
 	}
 
+	// Exclude specific product IDs (for avoiding duplicates between sections)
+	if len(filters.ExcludeProductIDs) > 0 {
+		query = query.Where("products.id NOT IN ?", filters.ExcludeProductIDs)
+	}
+
 	return query
 }
 

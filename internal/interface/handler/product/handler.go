@@ -587,7 +587,7 @@ func ListProductsHandler(w http.ResponseWriter, r *http.Request, repo repository
 }
 
 // GetFilteredProductsHandler handles Laravel-compatible filtered product listing
-// GET /products?locale=en&page=1&limit=10&category=&brand=&priceRange=&searchterm=&sortby=
+// GET /products?locale=en&page=1&limit=10&category=&brand=&priceRange=&searchterm=&sortby=&exclude=1,2,3
 func GetFilteredProductsHandler(w http.ResponseWriter, r *http.Request, repo repository.ProductRepository, categoryRepo repository.CategoryRepository, brandRepo repository.BrandRepository, imageRepo repository.ImageRepository) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=60, stale-while-revalidate=300")
@@ -599,6 +599,7 @@ func GetFilteredProductsHandler(w http.ResponseWriter, r *http.Request, repo rep
 	priceRange := r.URL.Query().Get("priceRange")
 	searchterm := r.URL.Query().Get("search")
 	sortby := r.URL.Query().Get("sortby")
+	excludeParam := r.URL.Query().Get("exclude")
 
 	// Set defaults
 	page := 1
@@ -629,18 +630,31 @@ func GetFilteredProductsHandler(w http.ResponseWriter, r *http.Request, repo rep
 		}
 	}
 
+	// Parse exclude parameter (comma-separated product IDs)
+	var excludeIDs []uint
+	if excludeParam != "" {
+		excludeStrings := strings.Split(excludeParam, ",")
+		for _, idStr := range excludeStrings {
+			idStr = strings.TrimSpace(idStr)
+			if id, err := strconv.ParseUint(idStr, 10, 32); err == nil {
+				excludeIDs = append(excludeIDs, uint(id))
+			}
+		}
+	}
+
 	// Create filters struct
 	filters := &repository.ProductFilters{
-		Page:         page,
-		Limit:        limit,
-		Locale:       locale,
-		SearchTerm:   searchterm,
-		Category:     category,
-		CategorySlug: category,   // Use category value as slug for filtering
-		Brand:        brandParam, // Store original comma-separated string
-		BrandSlugs:   brands,     // Store as array for filtering
-		PriceRange:   priceRange,
-		SortBy:       sortby,
+		Page:              page,
+		Limit:             limit,
+		Locale:            locale,
+		SearchTerm:        searchterm,
+		Category:          category,
+		CategorySlug:      category,   // Use category value as slug for filtering
+		Brand:             brandParam, // Store original comma-separated string
+		BrandSlugs:        brands,     // Store as array for filtering
+		PriceRange:        priceRange,
+		SortBy:            sortby,
+		ExcludeProductIDs: excludeIDs,
 	}
 	// Get filtered products
 	products, totalCount, err := repo.GetWithFilters(r.Context(), filters)
