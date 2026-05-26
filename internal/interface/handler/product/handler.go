@@ -182,10 +182,7 @@ func generateImageURL(imagePath string) string {
 	}
 
 	// Check local filesystem first (development static files)
-	fsPath := imagePath
-	if strings.HasPrefix(fsPath, "/") {
-		fsPath = strings.TrimPrefix(fsPath, "/")
-	}
+	fsPath := strings.TrimPrefix(imagePath, "/")
 	if _, err := os.Stat(fsPath); err == nil {
 		return "/" + filepath.ToSlash(fsPath)
 	}
