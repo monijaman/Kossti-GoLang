@@ -400,6 +400,91 @@ func BulkUpsertSpecificationHandler(w http.ResponseWriter, r *http.Request, spec
 	})
 }
 
+// CopySpecificationsHandler handles POST /specifications/copy
+// Copies all specifications from one product to another
+//
+// Request JSON:
+//
+//	{
+//	  "source_product_id": 3962,
+//	  "target_product_id": 3963
+//	}
+//
+// Response: Array of created specification objects
+// Error Handling: Returns 400 for invalid input, 404 if source has no specs, 500 for database errors
+func CopySpecificationsHandler(w http.ResponseWriter, r *http.Request, specRepo repository.SpecificationRepository) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var request struct {
+		SourceProductID uint `json:"source_product_id"`
+		TargetProductID uint `json:"target_product_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON payload"})
+		return
+	}
+
+	if request.SourceProductID == 0 || request.TargetProductID == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "source_product_id and target_product_id are required"})
+		return
+	}
+
+	fmt.Printf("[CopySpecifications] Copying from product %d to product %d\n", request.SourceProductID, request.TargetProductID)
+
+	// Get source specifications
+	sourceSpecs, err := specRepo.GetByProductID(r.Context(), request.SourceProductID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to get source specifications"})
+		return
+	}
+
+	if len(sourceSpecs) == 0 {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Source product has no specifications to copy"})
+		return
+	}
+
+	fmt.Printf("[CopySpecifications] Found %d specifications to copy\n", len(sourceSpecs))
+
+	// Create new specifications for target product
+	var newSpecs []*entities.Specification
+	for _, sourceSpec := range sourceSpecs {
+		newSpec := &entities.Specification{
+			ProductID:          request.TargetProductID,
+			SpecificationKeyID: sourceSpec.SpecificationKeyID,
+			Value:              sourceSpec.Value,
+			CreatedAt:          time.Now(),
+			UpdatedAt:          time.Now(),
+		}
+		newSpecs = append(newSpecs, newSpec)
+	}
+
+	// Bulk insert the new specifications
+	savedSpecs, err := specRepo.BulkUpsert(r.Context(), newSpecs)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to copy specifications"})
+		return
+	}
+
+	// Convert to response format
+	responses := make([]SpecificationResponse, len(savedSpecs))
+	for i, spec := range savedSpecs {
+		responses[i] = convertSpecificationToResponse(spec)
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"specifications": responses,
+		"count":          len(responses),
+		"message":        fmt.Sprintf("Successfully copied %d specifications from product %d to product %d", len(responses), request.SourceProductID, request.TargetProductID),
+	})
+}
+
 // UpdateSpecificationHandler handles PUT /specifications/{id}
 // Updates an existing specification. Can update the key (by ID or creating new key)
 // and/or the value.
@@ -575,13 +660,18 @@ func GetSpecificationsByProductHandler(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
+	fmt.Printf("[GetSpecifications] ProductID: %d\n", productID)
+
 	// Fetch existing specifications for this product
 	existingSpecs, err := specRepo.GetByProductID(r.Context(), uint(productID))
 	if err != nil {
+		fmt.Printf("[GetSpecifications] Error fetching existing specs: %v\n", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to get specifications"})
 		return
 	}
+
+	fmt.Printf("[GetSpecifications] Found %d existing specs\n", len(existingSpecs))
 
 	// Build map from specification_key_id to existing spec
 	existingMap := make(map[uint]*entities.Specification)
@@ -595,6 +685,9 @@ func GetSpecificationsByProductHandler(w http.ResponseWriter, r *http.Request, s
 		prod, err := productRepo.GetByID(r.Context(), uint(productID))
 		if err == nil && prod != nil && prod.CategoryID != nil {
 			categoryID = prod.CategoryID
+			fmt.Printf("[GetSpecifications] Product category ID: %d\n", *categoryID)
+		} else {
+			fmt.Printf("[GetSpecifications] Product not found or has no category. Error: %v\n", err)
 		}
 	}
 
@@ -604,6 +697,7 @@ func GetSpecificationsByProductHandler(w http.ResponseWriter, r *http.Request, s
 	if categoryID != nil && formGenRepo != nil {
 		catSpecs, err := formGenRepo.GetCategorySpecifications(r.Context(), *categoryID)
 		if err == nil && len(catSpecs) > 0 {
+			fmt.Printf("[GetSpecifications] Found %d category specs from form generator\n", len(catSpecs))
 			for _, ks := range catSpecs {
 				if es, ok := existingMap[ks.SpecificationKeyID]; ok {
 					finalResponses = append(finalResponses, convertSpecificationToResponse(es))
@@ -626,10 +720,15 @@ func GetSpecificationsByProductHandler(w http.ResponseWriter, r *http.Request, s
 				"count":          len(finalResponses),
 			})
 			return
+		} else {
+			fmt.Printf("[GetSpecifications] No category specs found. Error: %v, catSpecs length: %d\n", err, len(catSpecs))
 		}
+	} else {
+		fmt.Printf("[GetSpecifications] Skipping form generator: categoryID=%v, formGenRepo=%v\n", categoryID, formGenRepo != nil)
 	}
 
 	// Fallback: if no category form generator found, return only existing specs
+	fmt.Printf("[GetSpecifications] Falling back to existing specs only. Count: %d\n", len(existingSpecs))
 	responses := make([]SpecificationResponse, len(existingSpecs))
 	for i, spec := range existingSpecs {
 		responses[i] = convertSpecificationToResponse(spec)

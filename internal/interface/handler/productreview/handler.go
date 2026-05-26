@@ -577,6 +577,15 @@ func GetReviewsByProductHandler(w http.ResponseWriter, r *http.Request, reviewRe
 				if translation.Rating != "" {
 					resp.Rating = translation.Rating
 				}
+				// Also include translation's AdditionalDetails if available
+				if len(translation.AdditionalDetails) > 0 {
+					var additional interface{}
+					if err := json.Unmarshal(translation.AdditionalDetails, &additional); err != nil {
+						resp.AdditionalDetails = string(translation.AdditionalDetails)
+					} else {
+						resp.AdditionalDetails = additional
+					}
+				}
 			}
 		}
 

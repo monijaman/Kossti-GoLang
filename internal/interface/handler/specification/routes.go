@@ -101,6 +101,27 @@ func RegisterSpecificationRoutes(mux *http.ServeMux, specRepo repository.Specifi
 		BulkUpsertSpecificationHandler(w, r, specRepo, keyRepo)
 	})
 
+	// POST /specifications/copy - Copy specifications from one product to another
+	// Copies all specifications from source product to target product
+	//
+	// Request Body:
+	//   {
+	//     "source_product_id": 3962,
+	//     "target_product_id": 3963
+	//   }
+	//
+	// Response: Array of created specification objects
+	// Expected HTTP Status: 201 Created | 400 Bad Request | 404 Not Found | 500 Internal Server Error
+	mux.HandleFunc("/specifications/copy", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			w.Write([]byte(`{"error": "Only POST method is allowed"}`))
+			return
+		}
+		CopySpecificationsHandler(w, r, specRepo)
+	})
+
 	// GET /get-specifications/{product_id} - Get specifications by product ID
 	// Retrieves all specifications for a product with associated form generator metadata.
 	// Used by admin to view/manage all specs for a specific product.

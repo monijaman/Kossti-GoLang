@@ -86,13 +86,32 @@ func (r *PostgresProductRepo) Update(ctx context.Context, id uint, product *enti
 		return nil, err
 	}
 
+	// Preserve the existing slug before overwriting with entity data
+	existingSlug := productModel.Slug
+
 	// Update fields from entity
 	productModel.FromEntity(product)
 	productModel.ID = id // Ensure ID is preserved
 
-	// Generate new slug if name changed
+	// If no slug provided, keep the existing one or generate a unique one from the name
 	if productModel.Slug == "" {
-		productModel.Slug = generateSlug(productModel.Name)
+		candidate := generateSlug(productModel.Name)
+		// Check if the candidate slug is already used by a different product
+		var conflict models.ProductModel
+		err := r.db.WithContext(ctx).Where("slug = ? AND id != ?", candidate, id).First(&conflict).Error
+		if err == nil {
+			// Conflict with another product — append the ID to make it unique
+			productModel.Slug = fmt.Sprintf("%s-%d", candidate, id)
+		} else if errors.Is(err, gorm.ErrRecordNotFound) {
+			productModel.Slug = candidate
+		} else {
+			return nil, err
+		}
+	}
+
+	// If slug still ended up empty for any reason, fall back to the existing one
+	if productModel.Slug == "" {
+		productModel.Slug = existingSlug
 	}
 
 	if err := r.db.WithContext(ctx).Save(&productModel).Error; err != nil {
@@ -455,6 +474,9 @@ func (r *PostgresProductRepo) GetWithFilters(ctx context.Context, filters *repos
 		return nil, 0, err
 	}
 
+	// Debug logging
+	fmt.Printf("[GetWithFilters] Total count: %d for category: '%s', page: %d, limit: %d\n", totalCount, filters.CategorySlug, filters.Page, filters.Limit)
+
 	// Apply sorting
 	query = r.applySorting(query, filters.SortBy)
 
@@ -470,32 +492,32 @@ func (r *PostgresProductRepo) GetWithFilters(ctx context.Context, filters *repos
 		for i, model := range productModels {
 			productIDs[i] = model.ID
 		}
-		
+
 		fmt.Printf("[DEBUG] Fetching ratings for product IDs: %v\n", productIDs)
-		
-		// Query to get average ratings 
+
+		// Query to get average ratings
 		type RatingResult struct {
 			ProductID     uint     `gorm:"column:product_id"`
 			AverageRating *float64 `gorm:"column:average_rating"`
 		}
 		var ratings []RatingResult
-		
+
 		// Use Table().Select().Where().Group().Scan() approach for better GORM support
 		err := r.db.WithContext(ctx).
 			Table("product_reviews").
 			Select(
-				"product_id", 
+				"product_id",
 				"AVG(CAST(NULLIF(rating,'') AS NUMERIC)) as average_rating",
 			).
 			Where("product_id IN ? AND deleted_at IS NULL AND rating IS NOT NULL AND rating != ''", productIDs).
 			Group("product_id").
 			Scan(&ratings).Error
-			
+
 		fmt.Printf("[DEBUG] Rating query executed - Error: %v, Results count: %d\n", err, len(ratings))
 		if len(ratings) > 0 {
 			fmt.Printf("[DEBUG] First result: ProductID=%d, Rating=%v\n", ratings[0].ProductID, ratings[0].AverageRating)
 		}
-		
+
 		if err == nil && len(ratings) > 0 {
 			// Create a map for quick lookup
 			ratingsMap := make(map[uint]*float64)
@@ -505,7 +527,7 @@ func (r *PostgresProductRepo) GetWithFilters(ctx context.Context, filters *repos
 					fmt.Printf("[DEBUG] Mapped Product %d -> Rating: %.2f\n", rating.ProductID, *rating.AverageRating)
 				}
 			}
-			
+
 			// Assign ratings to products
 			for i := range productModels {
 				if rating, exists := ratingsMap[productModels[i].ID]; exists {
@@ -543,14 +565,18 @@ func (r *PostgresProductRepo) applyFilters(query *gorm.DB, filters *repository.P
 			query = query.Where("products.category_id = ?", categoryValue)
 		} else {
 			// It's a slug - fetch the category ID from slug to avoid JOIN
+			// Use LOWER() for case-insensitive slug matching
 			var category models.CategoryModel
 			if err := r.db.WithContext(query.Statement.Context).
-				Where("slug = ?", categoryValue).
+				Where("LOWER(slug) = LOWER(?)", categoryValue).
 				First(&category).Error; err == nil {
 				// Successfully found category, filter by its ID
 				query = query.Where("products.category_id = ?", category.ID)
+				fmt.Printf("[applyFilters] Found category '%s' with ID %d for slug '%s'\n", category.Name, category.ID, categoryValue)
+			} else {
+				// Category not found - log warning
+				fmt.Printf("[applyFilters] WARNING: Category slug '%s' not found in database - no results will be returned\n", categoryValue)
 			}
-			// If category not found, the query will return no results (correct behavior)
 		}
 	}
 

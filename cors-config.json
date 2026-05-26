@@ -2,9 +2,15 @@
   "CORSRules": [
     {
       "AllowedHeaders": ["*"],
-      "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
-      "AllowedOrigins": ["*"],
-      "ExposeHeaders": ["ETag", "x-amz-request-id"],
+      "AllowedMethods": ["GET", "PUT", "POST", "HEAD"],
+      "AllowedOrigins": [
+        "http://localhost:3000",
+        "http://localhost:9090",
+        "https://kossti.up.railway.app",
+        "https://kossti.com",
+        "https://www.kossti.com"
+      ],
+      "ExposeHeaders": ["ETag", "x-amz-request-id", "x-amz-id-2"],
       "MaxAgeSeconds": 3000
     }
   ]

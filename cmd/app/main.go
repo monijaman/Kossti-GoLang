@@ -37,6 +37,7 @@ import (
 	handlerbrand "kossti/internal/interface/handler/brand"
 	handlercategory "kossti/internal/interface/handler/category"
 	handlercomment "kossti/internal/interface/handler/comment"
+	handlercontact "kossti/internal/interface/handler/contact"
 	handlerfeedback "kossti/internal/interface/handler/feedback"
 	handlerformgenerator "kossti/internal/interface/handler/formgenerator"
 	handlerproduct "kossti/internal/interface/handler/product"
@@ -387,6 +388,7 @@ func main() {
 		productReviewRepo := pgRepo.NewProductReviewRepository(db)
 		formGeneratorRepo := pgRepo.NewFormGeneratorRepository(db)
 		feedbackRepo := pgRepo.NewFeedbackRepository(db)
+		contactRepo := pgRepo.NewContactRepository(db)
 
 		fmt.Println("Registering API routes...")
 		handlerauth.RegisterAuthRoutes(mux, userRepo, refreshTokenRepo)
@@ -400,6 +402,7 @@ func main() {
 		handlerformgenerator.RegisterRoutes(mux, formGeneratorRepo)
 		handleradmin.RegisterAdminRoutes(mux, userRepo, productRepo)
 		handlerfeedback.RegisterRoutes(mux, feedbackRepo)
+		handlercontact.RegisterRoutes(mux, contactRepo)
 
 		fmt.Println("[STARTUP] All application routes have been registered.")
 		routesReady <- true

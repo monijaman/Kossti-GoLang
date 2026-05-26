@@ -112,6 +112,9 @@ func (m *MigrationManager) GetAllModels() []interface{} {
 		&models.FormGeneratorModel{},
 		// Refresh tokens
 		&models.RefreshTokenModel{},
+
+		// Contact form submissions
+		&models.ContactModel{},
 	}
 }
 
