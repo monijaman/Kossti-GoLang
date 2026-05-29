@@ -633,7 +633,7 @@ func isNumeric(s string) bool {
 func (r *PostgresProductRepo) applySorting(query *gorm.DB, sortBy string) *gorm.DB {
 	switch sortBy {
 	case "popular":
-		query = query.Order("views_count DESC, priority DESC, updated_at DESC")
+		query = query.Order("priority DESC, views_count DESC, updated_at DESC")
 	case "price_asc":
 		query = query.Order("priority DESC, COALESCE(start_price, end_price) ASC, updated_at DESC")
 	case "price_desc":
